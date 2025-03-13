@@ -34,9 +34,10 @@ async def async_prompt(message: str, default: str = "") -> str:
 @coro
 async def main(
     concurrency: int = typer.Option(
-        default=2, help="Number of concurrent tasks, depending on your API rate limits."
+        default=1, help="Number of concurrent tasks, depending on your API rate limits."
     ),
 ):
+  
     """Deep Research CLI"""
     console.print(
         Panel.fit(
@@ -69,7 +70,7 @@ async def main(
     # First show progress for research plan
     console.print("\n[yellow]Creating research plan...[/yellow]")
     follow_up_questions = await generate_feedback(query, client, model)
-
+    #print(f"follow-up questions: {follow_up_questions}")
     # Then collect answers separately from progress display
     console.print("\n[bold yellow]Follow-up Questions:[/bold yellow]")
     answers = []
@@ -133,7 +134,7 @@ async def main(
             rprint(f"• {url}")
 
         # Save report
-        with open("output.md", "w") as f:
+        with open("output.md", "w", encoding='utf-8') as f:
             f.write(report)
         console.print("\n[dim]Report has been saved to output.md[/dim]")
 

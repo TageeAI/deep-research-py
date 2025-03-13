@@ -1,4 +1,5 @@
 import os
+import time
 import typer
 import json
 from openai import AsyncOpenAI
@@ -8,7 +9,7 @@ from rich.console import Console
 from dotenv import load_dotenv
 from .text_splitter import RecursiveCharacterTextSplitter
 from deep_research_py.config import EnvironmentConfig
-
+import ollama
 load_dotenv()
 
 
@@ -18,6 +19,9 @@ class AIClientFactory:
     @classmethod
     def create_client(cls, api_key: str, base_url: str) -> AsyncOpenAI:
         """Create an AsyncOpenAI-compatible client for the specified provider."""
+        service = os.getenv("DEFAULT_SERVICE", "ollama")
+        if service == "ollama":
+            return ollama.AsyncClient(host=base_url, timeout=600)
         return AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     @classmethod
@@ -56,18 +60,45 @@ class AIClientFactory:
 
 
 async def get_client_response(
-    client: AsyncOpenAI, model: str, messages: list, response_format: dict
+    client: AsyncOpenAI|ollama.AsyncClient, model: str, messages: list, response_format: dict = None
+):
+    if response_format is None:
+        response_format = ''
+    if isinstance(client, ollama.AsyncClient):
+        response = await client.chat(
+            model=model,
+            messages=messages,
+            format=response_format,
+            options={
+                "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", 80000)),
+                "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", 8000)),
+            }
+        )
+        result = response.message.content
+    else:
+        response = await client.beta.chat.completions.parse(
+            model=model,
+            messages=messages,
+            response_format=response_format,
+        )
+
+        result = response.choices[0].message.content
+    if response_format == '':
+        return result
+    return json.loads(result)
+
+async def get_client_response_2(
+    client: AsyncOpenAI, model: str, messages: list, response_format: dict = {}, format: str = ""
 ):
     response = await client.beta.chat.completions.parse(
         model=model,
         messages=messages,
-        response_format=response_format,
+        response_format=response_format
     )
 
     result = response.choices[0].message.content
 
-    return json.loads(result)
-
+    return result
 
 MIN_CHUNK_SIZE = 140
 encoder = tiktoken.get_encoding(

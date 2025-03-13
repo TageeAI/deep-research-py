@@ -1,11 +1,15 @@
 from typing import List, Dict, TypedDict, Optional
 from dataclasses import dataclass
 import asyncio
+from unittest.mock import Base
 import openai
 from deep_research_py.data_acquisition.services import search_service
 from .ai.providers import trim_prompt, get_client_response
 from .prompt import system_prompt
 import json
+from deep_research_py.utils import logger
+from pydantic import BaseModel
+import os
 
 
 class SearchResponse(TypedDict):
@@ -18,11 +22,17 @@ class ResearchResult(TypedDict):
 
 
 @dataclass
-class SerpQuery:
+class SerpQuery():
     query: str
     research_goal: str
 
+class SerpQueries(BaseModel):
+    queries: List[SerpQuery]
 
+class SerpQueryResponse(BaseModel):
+    learnings: List[str]
+    followUpQuestions: List[str]
+    
 async def generate_serp_queries(
     query: str,
     client: openai.OpenAI,
@@ -32,7 +42,9 @@ async def generate_serp_queries(
 ) -> List[SerpQuery]:
     """Generate SERP queries based on user input and previous learnings."""
 
-    prompt = f"""Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a JSON object with a 'queries' array field containing {num_queries} queries (or less if the original prompt is clear). Each query object should have 'query' and 'research_goal' fields. Make sure each query is unique and not similar to each other: <prompt>{query}</prompt>"""
+    prompt = (f"""Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a JSON object with a 'queries' array field containing {num_queries} queries (or less if the original prompt is clear). Each query object should have 'query' and 'research_goal' fields. Make sure each query is unique and not similar to each other: <prompt>{query}</prompt>"""
+
+    )
 
     if learnings:
         prompt += f"\n\nHere are some learnings from previous research, use them to generate more specific queries: {' '.join(learnings)}"
@@ -44,7 +56,7 @@ async def generate_serp_queries(
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": prompt},
         ],
-        response_format={"type": "json_object"},
+        response_format=SerpQueries.model_json_schema(),
     )
 
     try:
@@ -82,6 +94,7 @@ async def process_serp_result(
         f"{num_follow_up_questions} follow-up questions. The learnings should be unique, "
         "concise, and information-dense, including entities, metrics, numbers, and dates.\n\n"
         f"<contents>{contents_str}</contents>"
+        "use chinese to answer"
     )
 
     response = await get_client_response(
@@ -91,7 +104,7 @@ async def process_serp_result(
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": prompt},
         ],
-        response_format={"type": "json_object"},
+        response_format=SerpQueryResponse.model_json_schema(),
     )
 
     try:
@@ -106,7 +119,8 @@ async def process_serp_result(
         print(f"Raw response: {response}")
         return {"learnings": [], "followUpQuestions": []}
 
-
+class Report(BaseModel):
+    reportMarkdown: str
 async def write_final_report(
     prompt: str,
     learnings: List[str],
@@ -136,7 +150,7 @@ async def write_final_report(
             {"role": "system", "content": system_prompt()},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
+        response_format=Report.model_json_schema(),
     )
 
     try:
@@ -192,7 +206,7 @@ async def deep_research(
         async with semaphore:
             try:
                 # Search for content
-                result = await search_service.search(serp_query.query, limit=5)
+                result = await search_service.search(serp_query.query, limit=int(os.getenv("QUERY_LIMIT", 2)), max_concurrent_scrapes=1)
 
                 # Collect new URLs
                 new_urls = [
@@ -212,6 +226,8 @@ async def deep_research(
                     model=model,
                 )
 
+                logger.info(f"new learnings: {new_learnings}")
+                
                 all_learnings = learnings + new_learnings["learnings"]
                 all_urls = visited_urls + new_urls
 
@@ -256,4 +272,5 @@ async def deep_research(
 
     all_urls = list(set(url for result in results for url in result["visited_urls"]))
 
+    logger.debug(f"All learnings: {all_learnings}")
     return {"learnings": all_learnings, "visited_urls": all_urls}

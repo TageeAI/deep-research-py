@@ -2,16 +2,20 @@ from enum import Enum
 from typing import Dict, Optional, Any, List, TypedDict
 import os
 import asyncio
+
+from regex import F
 from deep_research_py.utils import logger
 from firecrawl import FirecrawlApp
 from .manager import SearchAndScrapeManager
-
+from .local_search import Crawl4AIEngine, Crawl4AIScraper
+from .scraper import PlaywrightScraper
 
 class SearchServiceType(Enum):
     """Supported search service types."""
 
     FIRECRAWL = "firecrawl"
     PLAYWRIGHT_DDGS = "playwright_ddgs"
+    LOCALCRAWL = "localcrawl"
 
 
 class SearchResponse(TypedDict):
@@ -40,6 +44,11 @@ class SearchService:
                 api_url=os.environ.get("FIRECRAWL_BASE_URL"),
             )
             self.manager = None
+        elif service_type == SearchServiceType.LOCALCRAWL.value:
+            self.firecrawl = None
+            self.manager = SearchAndScrapeManager(Crawl4AIEngine(), Crawl4AIScraper(headless=True))
+            # Initialize resources asynchronously later
+            self._initialized = False
         else:
             self.firecrawl = None
             self.manager = SearchAndScrapeManager()
@@ -69,14 +78,15 @@ class SearchService:
             if self.service_type == SearchServiceType.FIRECRAWL.value:
                 return await self.firecrawl.search(query, limit=limit, **kwargs)
             else:
-                search_results = await self.manager.search(
-                    query, num_results=limit, **kwargs
-                )
+                # search_results = await self.manager.search(
+                #     query, num_results=limit, **kwargs
+                # )
 
                 scraped_data = await self.manager.search_and_scrape(
                     query, num_results=limit, scrape_all=True, **kwargs
                 )
 
+                search_results = scraped_data['search_results']
                 # Format the response to match Firecrawl format
                 formatted_data = []
                 for result in search_results:
@@ -155,7 +165,7 @@ class Firecrawl:
             )
             return {"data": []}
 
-
+logger.info("Search service initialized with service type: {}".format(os.getenv("DEFAULT_SCRAPER", "playwright_ddgs")))
 # Initialize a global instance with the default settings
 search_service = SearchService(
     service_type=os.getenv("DEFAULT_SCRAPER", "playwright_ddgs")

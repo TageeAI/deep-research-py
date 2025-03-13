@@ -3,7 +3,10 @@ import openai
 import json
 from .prompt import system_prompt
 from .ai.providers import get_client_response
+from pydantic import BaseModel
 
+class Feedback(BaseModel):
+    questions:List[str]
 
 async def generate_feedback(query: str, client: openai.OpenAI, model: str) -> List[str]:
     """Generates follow-up questions to clarify research direction."""
@@ -17,10 +20,13 @@ async def generate_feedback(query: str, client: openai.OpenAI, model: str) -> Li
             {"role": "system", "content": system_prompt()},
             {
                 "role": "user",
-                "content": f"Given this research topic: {query}, generate 3-5 follow-up questions to better understand the user's research needs. Return the response as a JSON object with a 'questions' array field.",
+                "content": (f"Given this research topic: {query}, generate 3-5 follow-up questions to better understand the user's research needs. Return the response as a JSON object with a 'questions' array field."
+                            "use chinese to answer"
+                            
+                ),
             },
         ],
-        response_format={"type": "json_object"},
+        response_format=Feedback.model_json_schema(),
     )
 
     # Parse the JSON response

@@ -20,7 +20,7 @@ async def generate_feedback(query: str, client: openai.OpenAI, model: str) -> Li
             {"role": "system", "content": system_prompt()},
             {
                 "role": "user",
-                "content": (f"Given this research topic: {query}, generate 3-5 follow-up questions to better understand the user's research needs. Return the response as a JSON object with a 'questions' array field."
+                "content": (f"In order to generate a investment research report about {query}, generate 3-5 follow-up questions to better understand the user's research needs. Return the response as a JSON object with a 'questions' array field."
                             "use chinese to answer"
                             
                 ),

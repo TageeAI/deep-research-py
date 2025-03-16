@@ -46,7 +46,7 @@ class SearchService:
             self.manager = None
         elif service_type == SearchServiceType.LOCALCRAWL.value:
             self.firecrawl = None
-            self.manager = SearchAndScrapeManager(Crawl4AIEngine(), Crawl4AIScraper(headless=True))
+            self.manager = SearchAndScrapeManager(Crawl4AIEngine(), Crawl4AIScraper(headless=False))
             # Initialize resources asynchronously later
             self._initialized = False
         else:
@@ -78,10 +78,6 @@ class SearchService:
             if self.service_type == SearchServiceType.FIRECRAWL.value:
                 return await self.firecrawl.search(query, limit=limit, **kwargs)
             else:
-                # search_results = await self.manager.search(
-                #     query, num_results=limit, **kwargs
-                # )
-
                 scraped_data = await self.manager.search_and_scrape(
                     query, num_results=limit, scrape_all=True, **kwargs
                 )
@@ -93,6 +89,7 @@ class SearchService:
                     item = {
                         "url": result.url,
                         "title": result.title,
+                        "description": result.description,
                         "content": "",  # Default empty content
                     }
 
@@ -102,6 +99,7 @@ class SearchService:
                         item["content"] = scraped.text
 
                     formatted_data.append(item)
+
 
                 return {"data": formatted_data}
 

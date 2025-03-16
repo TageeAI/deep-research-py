@@ -21,7 +21,7 @@ class AIClientFactory:
         """Create an AsyncOpenAI-compatible client for the specified provider."""
         service = os.getenv("DEFAULT_SERVICE", "ollama")
         if service == "ollama":
-            return ollama.AsyncClient(host=base_url, timeout=600)
+            return ollama.AsyncClient(host=base_url, timeout=600, trust_env=False)
         return AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     @classmethod
@@ -60,21 +60,38 @@ class AIClientFactory:
 
 
 async def get_client_response(
-    client: AsyncOpenAI|ollama.AsyncClient, model: str, messages: list, response_format: dict = None
+    client: AsyncOpenAI|ollama.AsyncClient, model: str, messages: list, response_format: dict = None, temperature: float = 0.9
 ):
-    if response_format is None:
-        response_format = ''
+
     if isinstance(client, ollama.AsyncClient):
-        response = await client.chat(
-            model=model,
-            messages=messages,
-            format=response_format,
-            options={
-                "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", 80000)),
-                "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", 8000)),
-            }
-        )
-        result = response.message.content
+        if response_format is not None:
+            response = await client.chat(
+                model=model,
+                messages=messages,
+                format=response_format,
+                options={
+                    "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", 80000)),
+                    "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", 18000)),
+                    "temperature": temperature
+                }
+            )
+            try:
+                result = json.loads(response.message.content)
+            except Exception as e:
+                print(f"Error is: {e}")
+                result = {}
+        else:
+            response = await client.chat(
+                model=model,
+                messages=messages,
+                options={
+                    "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", 80000)),
+                    "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", 18000)),
+                    "temperature": temperature
+                }
+            )
+            return response.message.content
+        
     else:
         response = await client.beta.chat.completions.parse(
             model=model,
@@ -85,7 +102,7 @@ async def get_client_response(
         result = response.choices[0].message.content
     if response_format == '':
         return result
-    return json.loads(result)
+    return result
 
 async def get_client_response_2(
     client: AsyncOpenAI, model: str, messages: list, response_format: dict = {}, format: str = ""

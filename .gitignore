@@ -179,3 +179,9 @@ log/
 
 launch.json
 state.json
+
+PDFs/
+
+*.json
+*.jsonl
+.webui_secret_key

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Dict, TypedDict, Optional
 from dataclasses import dataclass
 import asyncio
@@ -41,10 +42,8 @@ async def generate_serp_queries(
     learnings: Optional[List[str]] = None,
 ) -> List[SerpQuery]:
     """Generate SERP queries based on user input and previous learnings."""
-
-    prompt = (f"""Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a JSON object with a 'queries' array field containing {num_queries} queries (or less if the original prompt is clear). Each query object should have 'query' and 'research_goal' fields. Make sure each query is unique and not similar to each other: <prompt>{query}</prompt>"""
-
-    )
+    nowday = datetime.now().strftime("%Y-%m-%d")
+    prompt = f"""Today is {nowday}. Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a JSON object with a 'queries' array field containing {num_queries} queries (or less if the original prompt is clear). Each query object should have 'query' and 'research_goal' fields. Make sure each query is unique and not similar to each other: <prompt>{query}</prompt>"""
 
     if learnings:
         prompt += f"\n\nHere are some learnings from previous research, use them to generate more specific queries: {' '.join(learnings)}"

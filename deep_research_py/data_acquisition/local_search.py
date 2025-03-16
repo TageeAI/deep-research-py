@@ -1,3 +1,4 @@
+from deep_research_py.test.test_pdf_download import download_pdf
 from .search import SearchEngine, SearchResult
 from typing import List, Dict, Any
 from crawl4ai import JsonCssExtractionStrategy, BrowserConfig, CrawlerRunConfig, CacheMode, AsyncWebCrawler
@@ -10,15 +11,22 @@ from pydantic import BaseModel, Field
 from deep_research_py.utils import logger
 from urllib.parse import quote
 from .scraper import Scraper, ScrapedContent
+import requests
+import os
+from urllib.parse import urlparse
+
 
 class Crawl4AIScraper(Scraper):
-
+    def __del__(self):
+        pass
     async def setup(self):
         """Initialize the scraper resources."""
+        await self.crawler.start()
         pass
 
     async def teardown(self):
         """Clean up the scraper resources."""
+        await self.crawler.close()
         pass
     def __init__(self, headless: bool = False, storage_state: str=None):
 
@@ -51,23 +59,96 @@ class Crawl4AIScraper(Scraper):
             scan_full_page=True,
             scroll_delay=0.2,
             cache_mode=CacheMode.DISABLED,
-            semaphore_count=1,
+            semaphore_count=1
         )
+        
+        self.crawler = AsyncWebCrawler(config=self.browser_config)
+        
         return 
+    
+    def download_pdf(self, url, parent_dir:str = './') -> bool:
+        """
+        检查 URL 是否为 PDF 文件，如果是，则下载到指定父目录。
+        
+        参数:
+        - url: 要检查和下载的 URL 字符串
+        - parent_dir: 保存 PDF 文件的父目录路径
+        """
+        try:
+            # 确保父目录存在，如果不存在则创建
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
 
+            # 发送 HEAD 请求检查文件类型（避免直接下载整个文件）
+            # response = requests.head(url, allow_redirects=True)
+            # content_type = response.headers.get('Content-Type', '').lower()
+            content_type = ""
+            # 检查是否为 PDF 类型
+            if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
+                print(f"检测到 PDF 文件: {url}")
+                
+                # 获取文件名（从 URL 中提取，或使用默认名）
+                parsed_url = urlparse(url)
+                filename = os.path.basename(parsed_url.path)
+                if not filename:
+                    filename = 'downloaded_file.pdf'  # 默认文件名
+                elif not filename.lower().endswith('.pdf'):
+                    filename += '.pdf'
+
+                # 构建保存路径
+                # 如果filename长度超过100，则截断最后100个字符
+                if len(filename) > 100:
+                    filename = filename[-100:]
+                save_path = os.path.join(parent_dir, filename)
+
+                # 下载文件
+                print(f"正在下载到: {save_path}")
+                response = requests.get(url, stream=True, timeout=30)  # 使用流模式下载大文件
+                response.raise_for_status()  # 检查请求是否成功
+
+                # 以二进制写入文件
+                with open(save_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):  # 分块写入
+                        if chunk:
+                            f.write(chunk)
+                print(f"下载完成: {save_path}")
+                return True
+            else:
+                print(f"URL 不是 PDF 文件: {url} (Content-Type: {content_type})")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            print(f"下载失败: {e}")
+            return True
+        except Exception as e:
+            print(f"发生错误: {e}")
+            return True
     async def scrape(self, url: str, **kwargs) -> ScrapedContent:
-        async with AsyncWebCrawler(config=self.browser_config) as crawler:
-            result = await crawler.arun(
+        #如果url 是pdf，则下载pdf文件
+        downloaded = self.download_pdf(url, parent_dir="./PDFs")
+        if downloaded :
+            return ScrapedContent(
                 url=url,
-                config=self.scrape_config
+                html="",
+                text="",
+                status_code=200,
+                metadata={
+                    # "title": title,
+                    # "headers": response.headers if response else {},
+                },
             )
-            
-        if result.success:
-            
-            main_text = trafilatura.extract(result.html,favor_precision=True)
 
-            #self.save_content({"url":url, "main_text":main_text})
-            
+        # async with AsyncWebCrawler(config=self.browser_config) as crawler:
+        #     result = await crawler.arun(
+        #         url=url,
+        #         config=self.scrape_config
+        #     )
+        result = await self.crawler.arun(
+            url=url,
+            config=self.scrape_config
+        )
+        if result.success:            
+            main_text = trafilatura.extract(result.html,favor_precision=True) 
             return ScrapedContent(
                 url=url,
                 html=result.html,
@@ -78,10 +159,18 @@ class Crawl4AIScraper(Scraper):
                     # "headers": response.headers if response else {},
                 },
             )
-
         else:
             print("Crawl failed:", result.error_message)
-            return ""    
+            return ScrapedContent(
+                url=url,
+                html="",
+                text="",
+                status_code=200,
+                metadata={
+                    # "title": title,
+                    # "headers": response.headers if response else {},
+                },
+            ) 
         return contents
     
 class Crawl4AIEngine(SearchEngine):
@@ -140,9 +229,7 @@ class Crawl4AIEngine(SearchEngine):
             scan_full_page=True,
             scroll_delay=1,
             cache_mode=CacheMode.DISABLED,
-            extraction_strategy=JsonCssExtractionStrategy(schema),
-            semaphore_count=1,
-            
+            extraction_strategy=JsonCssExtractionStrategy(schema)            
         )   # Default crawl run configuration
 
         
@@ -152,8 +239,7 @@ class Crawl4AIEngine(SearchEngine):
             override_navigator=True,
             scan_full_page=True,
             #scroll_delay=1,
-            cache_mode=CacheMode.DISABLED,
-            semaphore_count=1,
+            cache_mode=CacheMode.DISABLED
         )
         return 
 

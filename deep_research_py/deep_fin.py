@@ -11,6 +11,7 @@ from deep_research_py.deep_research import deep_research, write_final_report, se
 from deep_research_py.feedback import generate_feedback
 from deep_research_py.ai.providers import AIClientFactory
 from deep_research_py.config import EnvironmentConfig
+from deep_research_py.outline import generate_outline
 
 app = typer.Typer()
 console = Console()
@@ -56,7 +57,7 @@ async def main(
     model = AIClientFactory.get_model()
 
     # Get initial inputs with clear formatting
-    query = await async_prompt("\n🔍 What would you like to research? ")
+    query = await async_prompt("\n🔍 What investment would you like to research? ")
     console.print()
 
     breadth_prompt = "📊 Research breadth (recommended 2-10) [4]: "
@@ -82,10 +83,11 @@ async def main(
 
     # Combine information
     combined_query = f"""
-    Initial Query: {query}
-    Follow-up Questions and Answers:
+    对{query}的投研需求如下:
     {chr(10).join(f"Q: {q} A: {a}" for q, a in zip(follow_up_questions, answers))}
     """
+    
+    outline = await generate_outline(query, combined_query, client, model)
 
     # Now use Progress for the research phase
     with Progress(
@@ -95,7 +97,7 @@ async def main(
     ) as progress:
         # Do research
         task = progress.add_task(
-            "[yellow]Researching your topic...[/yellow]", total=None
+            "[yellow]Researching by your outline ...[/yellow]", total=None
         )
         research_results = await deep_research(
             query=combined_query,

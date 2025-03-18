@@ -15,10 +15,10 @@ model = os.getenv("OLLAMA_MODEL", "gemma3:27b-it-fp16")
 client = AIClientFactory.get_client()
 #outline.generate_outline("tesla", "研究恐慌情绪", client, "qwen2.5:latest")
 async def test_outline():
-    outline = await generate_outline("tesla", "使用查理芒格模型研究市场恐慌情绪对股价的影响", client, model)
+    outline = await generate_outline("tesla", "研究市场恐慌情绪对股价的影响", client, model)
 
     print(outline)
-    with open("outline.txt", "w+", encoding='utf-8') as f:
+    with open("tesla_001.txt", "w+", encoding='utf-8') as f:
         f.write(outline)
     return outline
 
